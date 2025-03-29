@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Doctor Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/face_detection.js" crossorigin="anonymous"></script>
+    <style>
+        :root {
+            --bg-color: #0a1a2e;
+            --text-color: #e0e7ff;
+            --card-bg: rgba(255, 255, 255, 0.05);
+            --card-border: rgba(255, 255, 255, 0.1);
+            --accent-color: #00d4ff;
+            --hover-color: #ff00ff;
+            --glow-color: #00d4ff;
+        }
+        [data-theme="light"] {
+            --bg-color: #f0f4f8;
+            --text-color: #1a2a44;
+            --card-bg: rgba(0, 0, 0, 0.05);
+            --card-border: rgba(0, 0, 0, 0.1);
+            --accent-color: #007bff;
+            --hover-color: #ff007a;
+            --glow-color: #007bff;
+        }
+        body {
+            background: linear-gradient(135deg, var(--bg-color), #1a2e44);
+            color: var(--text-color);
+            font-family: 'Arial', sans-serif;
+            min-height: 100vh;
+            margin: 0;
+            padding: 10px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            overflow-y: auto;
+            transition: background 0.5s ease, color 0.5s ease;
+            perspective: 1000px;
+            animation: backgroundPulse 10s infinite alternate;
+        }
+        @keyframes backgroundPulse {
+            0% { background: linear-gradient(135deg, var(--bg-color), #1a2e44); }
+            50% { background: linear-gradient(135deg, #1a2e44, var(--bg-color)); }
+            100% { background: linear-gradient(135deg, var(--bg-color), #1a2e44); }
+        }
+        .dashboard-container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            width: 100%;
+            max-width: 1200px;
+            padding: 10px;
+            transform-style: preserve-3d;
+            animation: floatIn 1.5s ease-out forwards;
+        }
+        @keyframes floatIn {
+            0% { opacity: 0; transform: translateZ(-100px) rotateX(-20deg); }
+            100% { opacity: 1; transform: translateZ(0) rotateX(0); }
+        }
+        .glass-container {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 15px;
+            backdrop-filter: blur(15px);
+            padding: 15px;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 0 15px rgba(0, 212, 255, 0.2), inset 0 0 8px rgba(255, 255, 255, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            transform-style: preserve-3d;
+            transform: rotateX(5deg) rotateY(5deg);
+            animation: subtleFloat 4s infinite ease-in-out;
+        }
+        .glass-container:hover {
+            transform: translateY(-5px) rotateX(0deg) rotateY(0deg);
+            box-shadow: 0 0 30px rgba(0, 212, 255, 0.4), inset 0 0 12px rgba(255, 255, 255, 0.15);
+        }
+        @keyframes subtleFloat {
+            0%, 100% { transform: translateZ(0) rotateX(5deg) rotateY(5deg); }
+            50% { transform: translateZ(15px) rotateX(3deg) rotateY(3deg); }
+        }
+        .mark-attendance-box {
+            background: linear-gradient(135deg, rgba(0, 212, 255, 0.1), rgba(255, 0, 255, 0.1));
+            border: 2px solid var(--accent-color);
+            position: relative;
+            overflow: hidden;
+        }
+        .mark-attendance-box::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, var(--glow-color) 0%, transparent 70%);
+            animation: glow 5s infinite alternate;
+            opacity: 0.3;
+            z-index: 0;
+            transform: translateZ(-10px);
+        }
+        @keyframes glow {
+            0% { transform: translate(-50%, -50%) rotate(0deg); }
+            100% { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+        .mark-attendance-box h3, .location-box h3, .healthcare-box h3 {
+            color: var(--accent-color);
+            font-size: 1.5rem;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            position: relative;
+            z-index: 1;
+            text-shadow: 0 0 8px var(--accent-color), 0 0 15px var(--hover-color);
+            animation: neonFlicker 3s infinite;
+        }
+        @keyframes neonFlicker {
+            0%, 100% { text-shadow: 0 0 8px var(--accent-color), 0 0 15px var(--hover-color); }
+            50% { text-shadow: 0 0 12px var(--accent-color), 0 0 20px var(--hover-color); }
+        }
+        #video, #canvasOverlay {
+            width: 100%;
+            max-width: 100%;
+            height: auto;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            border: 2px solid var(--accent-color);
+            transform: translateZ(10px);
+            transition: transform 0.3s ease;
+        }
+        #video:hover, #canvasOverlay:hover {
+            transform: translateZ(15px);
+        }
+        #canvasOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+        }
+        .video-container {
+            position: relative;
+            width: 100%;
+            transform-style: preserve-3d;
+        }
+        .btn-primary {
+            background: linear-gradient(45deg, var(--accent-color), var(--hover-color));
+            border: none;
+            border-radius: 10px;
+            padding: 10px;
+            width: 100%;
+            font-size: 1rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            z-index: 1;
+            transform: translateZ(10px);
+            box-shadow: 0 0 10px var(--glow-color);
+        }
+        .btn-primary:hover {
+            transform: translateY(-3px) translateZ(15px);
+            box-shadow: 0 0 20px var(--hover-color);
+            animation: buttonPulse 1s infinite;
+        }
+        @keyframes buttonPulse {
+            0%, 100% { box-shadow: 0 0 10px var(--glow-color); }
+            50% { box-shadow: 0 0 20px var(--hover-color); }
+        }
+        #attendanceMessage, #healthcareMessage {
+            margin-top: 10px;
+            font-size: 0.9rem;
+            color: var(--text-color);
+            text-shadow: 0 0 5px rgba(0, 212, 255, 0.5);
+            transform: translateZ(10px);
+            animation: fadeInUp 0.5s ease-out;
+        }
+        @keyframes fadeInUp {
+            0% { opacity: 0; transform: translateZ(0) translateY(15px); }
+            100% { opacity: 1; transform: translateZ(10px) translateY(0); }
+        }
+        .location-box, .healthcare-box {
+            background: linear-gradient(135deg, rgba(0, 212, 255, 0.05), rgba(255, 0, 255, 0.05));
+        }
+        #map {
+            height: 250px;
+            width: 100%;
+            margin-bottom: 10px;
+            border-radius: 10px;
+            border: 2px solid var(--accent-color);
+            box-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
+            transform: translateZ(10px);
+            transition: transform 0.3s ease;
+        }
+        #map:hover {
+            transform: translateZ(15px);
+        }
+        #locationDebug {
+            font-size: 0.9rem;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            color: var(--text-color);
+            text-shadow: 0 0 5px rgba(0, 212, 255, 0.5);
+            transform: translateZ(10px);
+        }
+        .theme-toggle, .live-toggle {
+            position: fixed;
+            top: 10px;
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 50%;
+            padding: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 8px rgba(0, 212, 255, 0.2);
+            transform: translateZ(10px);
+            z-index: 1000;
+        }
+        .live-toggle {
+            right: 60px;
+        }
+        .theme-toggle {
+            right: 10px;
+        }
+        .theme-toggle:hover, .live-toggle:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateZ(15px) rotate(360deg);
+            box-shadow: 0 0 15px var(--glow-color);
+            animation: spinGlow 0.5s ease;
+        }
+        @keyframes spinGlow {
+            0% { transform: translateZ(10px) rotate(0deg); }
+            100% { transform: translateZ(15px) rotate(360deg); }
+        }
+        .phc-selector {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            z-index: 1000;
+        }
+        .phc-selector select {
+            background: var(--card-bg);
+            color: var(--text-color);
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            padding: 6px 10px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 8px rgba(0, 212, 255, 0.2);
+        }
+        .phc-selector select:hover {
+            background: rgba(255, 255, 255, 0.3);
+            box-shadow: 0 0 15px var(--glow-color);
+        }
+        .form-label {
+            color: var(--text-color);
+            font-size: 0.9rem;
+            text-shadow: 0 0 5px rgba(0, 212, 255, 0.5);
+        }
+        .form-control, .form-control:focus {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-color);
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            box-shadow: 0 0 8px rgba(0, 212, 255, 0.2);
+            transition: all 0.3s ease;
+        }
+        .form-control:hover, .form-control:focus {
+            background: rgba(255, 255, 255, 0.2);
+            box-shadow: 0 0 15px var(--glow-color);
+        }
+        textarea.form-control {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        /* Mobile Responsive Adjustments */
+        @media (max-width: 768px) {
+            body {
+                padding: 5px;
+            }
+            .dashboard-container {
+                gap: 15px;
+                padding: 5px;
+            }
+            .glass-container {
+                padding: 10px;
+                border-radius: 10px;
+                box-shadow: 0 0 10px rgba(0, 212, 255, 0.2);
+            }
+            .mark-attendance-box h3, .location-box h3, .healthcare-box h3 {
+                font-size: 1.2rem;
+                margin-bottom: 10px;
+                letter-spacing: 1px;
+            }
+            #video, #canvasOverlay {
+                max-height: 200px;
+                margin-bottom: 8px;
+            }
+            #map {
+                height: 200px;
+                margin-bottom: 8px;
+            }
+            #locationDebug, #attendanceMessage, #healthcareMessage {
+                font-size: 0.8rem;
+                padding: 6px;
+            }
+            .btn-primary {
+                padding: 8px;
+                font-size: 0.9rem;
+            }
+            .theme-toggle, .live-toggle {
+                top: 5px;
+                padding: 6px;
+            }
+            .live-toggle {
+                right: 50px;
+            }
+            .theme-toggle {
+                right: 5px;
+            }
+            .phc-selector {
+                top: 5px;
+                left: 5px;
+            }
+            .phc-selector select {
+                padding: 5px 8px;
+                font-size: 0.8rem;
+            }
+            .form-label {
+                font-size: 0.8rem;
+            }
+            .form-control {
+                font-size: 0.8rem;
+                padding: 6px;
+            }
+            textarea.form-control {
+                min-height: 60px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .mark-attendance-box h3, .location-box h3, .healthcare-box h3 {
+                font-size: 1rem;
+            }
+            #video, #canvasOverlay {
+                max-height: 180px;
+            }
+            #map {
+                height: 180px;
+            }
+            .btn-primary {
+                padding: 6px;
+                font-size: 0.8rem;
+            }
+            .theme-toggle, .live-toggle {
+                padding: 5px;
+            }
+            .phc-selector select {
+                padding: 4px 6px;
+                font-size: 0.7rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="phc-selector">
+        <select id="phcAreaSelect" onchange="updatePHCArea()">
+            {% for geofence in geofences %}
+            <option value="{{ geofence.id }}" data-lat-min="{{ geofence.lat_min }}" data-lat-max="{{ geofence.lat_max }}"
+                    data-lng-min="{{ geofence.lng_min }}" data-lng-max="{{ geofence.lng_max }}"
+                    data-lat-center="{{ (geofence.lat_min + geofence.lat_max) / 2 }}"
+                    data-lng-center="{{ (geofence.lng_min + geofence.lng_max) / 2 }}">
+                {{ geofence.name }}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="theme-toggle" onclick="toggleTheme()">
+        <i class="fas fa-moon"></i>
+    </div>
+    <div class="live-toggle" onclick="toggleLiveMode()" title="Toggle Live Location">
+        <i class="fas fa-check"></i>
+    </div>
+
+    <div class="dashboard-container">
+        <div class="glass-container mark-attendance-box">
+            <h3>Mark Attendance</h3>
+            <div class="video-container">
+                <video id="video" autoplay playsinline></video>
+                <canvas id="canvasOverlay"></canvas>
+            </div>
+            <canvas id="canvas" style="display:none;"></canvas>
+            <form id="attendanceForm" enctype="multipart/form-data">
+                <button type="button" class="btn btn-primary" id="captureBtn">Capture Photo</button>
+                <button type="submit" class="btn btn-primary" style="display:none;" id="submitBtn">Mark Attendance</button>
+            </form>
+            <div id="attendanceMessage" class="mt-3"></div>
+        </div>
+
+        <div class="glass-container location-box">
+            <h3>Location</h3>
+            <div id="map"></div>
+            <div id="locationDebug" class="mt-2"></div>
+        </div>
+
+    <div class="glass-container healthcare-box">
+        <h3>Report Healthcare Service</h3>
+        <form id="healthcareForm" enctype="multipart/form-data">
+            <div class="mb-3">
+                <label for="serviceType" class="form-label">Service Type</label>
+                <select id="serviceType" class="form-control" required>
+                    <option value="Consultation">Consultation</option>
+                    <option value="Vaccination">Vaccination</option>
+                    <option value="Treatment">Treatment</option>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label for="patientCount" class="form-label">Number of Patients</label>
+                <input type="number" id="patientCount" class="form-control" required min="1">
+            </div>
+            <div class="mb-3">
+                <label for="details" class="form-label">Details (Optional)</label>
+                <textarea id="details" class="form-control"></textarea>
+            </div>
+            <!-- New Row for Patient Details Upload -->
+            <div class="mb-3">
+                <label for="patientDetails" class="form-label">Upload Patient Details (CSV or PDF)</label>
+                <input type="file" id="patientDetails" class="form-control" accept=".csv,.pdf">
+            </div>
+            <button type="submit" class="btn btn-primary">Submit Report</button>
+        </form>
+        <div id="healthcareMessage" class="mt-3"></div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
+    <script>
+        let selectedPHCArea = document.getElementById('phcAreaSelect').value;
+        let geofenceLat, geofenceLng, geofenceBounds;
+        let useLiveLocation = true;
+        let stream;
+        let locationUpdateInterval;
+        let map, marker, geofenceLayer;
+
+        function initializeMap() {
+            const select = document.getElementById('phcAreaSelect');
+            const option = select.options[select.selectedIndex];
+            geofenceLat = parseFloat(option.getAttribute('data-lat-center'));
+            geofenceLng = parseFloat(option.getAttribute('data-lng-center'));
+            geofenceBounds = [
+                [parseFloat(option.getAttribute('data-lat-min')), parseFloat(option.getAttribute('data-lng-min'))],
+                [parseFloat(option.getAttribute('data-lat-max')), parseFloat(option.getAttribute('data-lng-max'))]
+            ];
+
+            if (map) {
+                map.remove();
+            }
+            map = L.map('map').setView([geofenceLat, geofenceLng], 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+            marker = L.marker([geofenceLat, geofenceLng]).addTo(map)
+                .bindPopup(`${option.text} Geofence Center (${geofenceLat.toFixed(5)}, ${geofenceLng.toFixed(5)})`).openPopup();
+            geofenceLayer = L.rectangle(geofenceBounds, { color: "red", weight: 1 }).addTo(map)
+                .bindPopup(`${option.text} Geofence Area`);
+
+            updateMapWithLocation(geofenceLat, geofenceLng, `${option.text} Location`);
+        }
+
+        function updatePHCArea() {
+            selectedPHCArea = document.getElementById('phcAreaSelect').value;
+            initializeMap();
+            if (useLiveLocation) {
+                updateLocation();
+            }
+        }
+
+        function updateMapWithLocation(latitude, longitude, label, accuracy = null) {
+            document.getElementById('locationDebug').innerText = `${label}: (${latitude.toFixed(5)}, ${longitude.toFixed(5)})`;
+            if (accuracy !== null) {
+                document.getElementById('locationDebug').innerText += ` - Accuracy: ${accuracy.toFixed(0)} meters`;
+            }
+            map.setView([latitude, longitude], 13);
+            marker.setLatLng([latitude, longitude]).bindPopup(`${label} (${latitude.toFixed(5)}, ${longitude.toFixed(5)})`).openPopup();
+        }
+
+        initializeMap();
+
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const canvasOverlay = document.getElementById('canvasOverlay');
+        const captureBtn = document.getElementById('captureBtn');
+        const submitBtn = document.getElementById('submitBtn');
+
+        const faceDetection = new FaceDetection({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${file}` });
+        faceDetection.setOptions({ minDetectionConfidence: 0.5 });
+        faceDetection.onResults((results) => {
+            const ctx = canvasOverlay.getContext('2d');
+            ctx.clearRect(0, 0, canvasOverlay.width, canvasOverlay.height);
+            if (results.detections.length > 0) {
+                results.detections.forEach(det => {
+                    const box = det.boundingBox;
+                    ctx.strokeStyle = 'green';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(box.xCenter - box.width / 2, box.yCenter - box.height / 2, box.width, box.height);
+                });
+            }
+        });
+
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(s => {
+                stream = s;
+                video.srcObject = stream;
+                function detectFaces() {
+                    canvasOverlay.width = video.videoWidth;
+                    canvasOverlay.height = video.videoHeight;
+                    faceDetection.send({ image: video });
+                    requestAnimationFrame(detectFaces);
+                }
+                detectFaces();
+            })
+            .catch(err => {
+                document.getElementById('attendanceMessage').innerHTML = 
+                    `<div class="alert alert-danger">Camera access denied. Please allow camera permissions.</div>`;
+            });
+
+        captureBtn.addEventListener('click', () => {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+            submitBtn.style.display = 'block';
+            captureBtn.style.display = 'none';
+        });
+
+        function getLiveLocation(callback, retryCount = 0, maxRetries = 3) {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    position => {
+                        const lat = position.coords.latitude;
+                        const lng = position.coords.longitude;
+                        const accuracy = position.coords.accuracy;
+                        if (accuracy > 1000 && retryCount < maxRetries) {
+                            console.warn(`Location accuracy too low (${accuracy} meters), retrying (${retryCount + 1}/${maxRetries})...`);
+                            setTimeout(() => getLiveLocation(callback, retryCount + 1, maxRetries), 2000);
+                        } else {
+                            callback(lat, lng, accuracy);
+                        }
+                    },
+                    error => {
+                        console.error('Geolocation error:', error);
+                        document.getElementById('locationDebug').innerHTML = 
+                            `<div class="alert alert-danger">Geolocation error: ${error.message}</div>`;
+                    },
+                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                );
+            } else {
+                console.error('Geolocation not supported by this browser.');
+                document.getElementById('locationDebug').innerHTML = 
+                    `<div class="alert alert-danger">Geolocation not supported by this browser.</div>`;
+            }
+        }
+
+        document.getElementById('attendanceForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData();
+            canvas.toBlob(blob => {
+                formData.append('photo', blob, 'captured_photo.jpg');
+                formData.append('phc_area_id', selectedPHCArea);
+                getLiveLocation((lat, lng, accuracy) => {
+                    if (!lat || !lng) {
+                        document.getElementById('attendanceMessage').innerHTML = 
+                            `<div class="alert alert-danger">Failed to get live location for attendance.</div>`;
+                        return;
+                    }
+                    formData.append('live_latitude', lat);
+                    formData.append('live_longitude', lng);
+                    formData.append('accuracy', accuracy);
+                    fetch('/upload_photo', {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        const messageDiv = document.getElementById('attendanceMessage');
+                        if (data.success) {
+                            messageDiv.innerHTML = `<div class="alert alert-success">${data.message} (${data.geofence_status} PHC Area)</div>`;
+                            submitBtn.style.display = 'none';
+                            captureBtn.style.display = 'block';
+                        } else {
+                            messageDiv.innerHTML = `<div class="alert alert-warning">${data.error} (${data.geofence_status} PHC Area)</div>`;
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error marking attendance:', error);
+                        document.getElementById('attendanceMessage').innerHTML = 
+                            `<div class="alert alert-danger">Error marking attendance: ${error.message}</div>`;
+                    });
+                });
+            }, 'image/jpeg');
+        });
+
+        function updateLocation() {
+            getLiveLocation((lat, lng, accuracy) => {
+                if (!lat || !lng) {
+                    console.warn('Failed to get live location for periodic update.');
+                    return;
+                }
+                updateMapWithLocation(lat, lng, 'Live Location', accuracy);
+                fetch('/update_location', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ latitude: lat, longitude: lng, accuracy: accuracy, phc_area_id: selectedPHCArea })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Location update response:', data);
+                })
+                .catch(error => {
+                    console.error('Error sending location update:', error);
+                    document.getElementById('locationDebug').innerHTML = 
+                        `<div class="alert alert-danger">Error sending location update: ${error.message}</div>`;
+                });
+            });
+        }
+
+        function toggleLiveMode() {
+            useLiveLocation = !useLiveLocation;
+            const liveToggleIcon = document.querySelector('.live-toggle i');
+            if (useLiveLocation) {
+                liveToggleIcon.classList.remove('fa-map-marker-alt');
+                liveToggleIcon.classList.add('fa-check');
+                updateLocation();
+                locationUpdateInterval = setInterval(updateLocation, 5000);
+            } else {
+                liveToggleIcon.classList.remove('fa-check');
+                liveToggleIcon.classList.add('fa-map-marker-alt');
+                clearInterval(locationUpdateInterval);
+                const select = document.getElementById('phcAreaSelect');
+                const option = select.options[select.selectedIndex];
+                updateMapWithLocation(
+                    parseFloat(option.getAttribute('data-lat-center')),
+                    parseFloat(option.getAttribute('data-lng-center')),
+                    `${option.text} Location`
+                );
+            }
+        }
+
+        if (useLiveLocation) {
+            updateLocation();
+            locationUpdateInterval = setInterval(updateLocation, 5000);
+        }
+
+        function toggleTheme() {
+            const body = document.body;
+            const themeToggle = document.querySelector('.theme-toggle i');
+            if (body.getAttribute('data-theme') === 'light') {
+                body.setAttribute('data-theme', 'dark');
+                themeToggle.classList.remove('fa-sun');
+                themeToggle.classList.add('fa-moon');
+            } else {
+                body.setAttribute('data-theme', 'light');
+                themeToggle.classList.remove('fa-moon');
+                themeToggle.classList.add('fa-sun');
+            }
+        }
+
+        window.addEventListener('beforeunload', () => {
+            if (stream) stream.getTracks().forEach(track => track.stop());
+            clearInterval(locationUpdateInterval);
+        });
+
+        document.getElementById('healthcareForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const serviceType = document.getElementById('serviceType').value;
+            const patientCount = document.getElementById('patientCount').value;
+            const details = document.getElementById('details').value;
+
+            fetch('/report_healthcare_service', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ service_type: serviceType, patient_count: patientCount, details: details })
+            })
+            .then(response => response.json())
+            .then(data => {
+                const messageDiv = document.getElementById('healthcareMessage');
+                if (data.success) {
+                    messageDiv.innerHTML = `<div class="alert alert-success">${data.message}</div>`;
+                    e.target.reset();
+                } else {
+                    messageDiv.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+                }
+            })
+            .catch(error => {
+                console.error('Error reporting healthcare service:', error);
+                document.getElementById('healthcareMessage').innerHTML = 
+                    `<div class="alert alert-danger">Error reporting healthcare service: ${error.message}</div>`;
+            });
+        });
+
+        document.getElementById('healthcareForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const serviceType = document.getElementById('serviceType').value;
+            const patientCount = document.getElementById('patientCount').value;
+            const details = document.getElementById('details').value;
+            const patientDetailsFile = document.getElementById('patientDetails').files[0];
+        
+            const formData = new FormData();
+            formData.append('service_type', serviceType);
+            formData.append('patient_count', patientCount);
+            formData.append('details', details);
+            if (patientDetailsFile) {
+                formData.append('patient_details', patientDetailsFile);
+            }
+        
+            fetch('/report_healthcare_service', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                const messageDiv = document.getElementById('healthcareMessage');
+                if (data.success) {
+                    messageDiv.innerHTML = `<div class="alert alert-success">${data.message}</div>`;
+                    e.target.reset();
+                } else {
+                    messageDiv.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+                }
+            })
+            .catch(error => {
+                console.error('Error reporting healthcare service:', error);
+                document.getElementById('healthcareMessage').innerHTML = 
+                    `<div class="alert alert-danger">Error reporting healthcare service: ${error.message}</div>`;
+            });
+        });
+
+    </script>
+</body>
+</html>

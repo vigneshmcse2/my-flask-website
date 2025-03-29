@@ -1,0 +1,1040 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DDHS Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-color: #1a1f2e;
+            --text-color: #d3d7e0;
+            --card-bg: #252c42;
+            --accent-color: #00d4ff;
+            --hover-color: #e74c3c;
+            --glow-color: #00d4ff;
+        }
+
+        body {
+            background: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+            animation: backgroundPulse 12s infinite alternate;
+        }
+
+        @keyframes backgroundPulse {
+            0% { background: var(--bg-color); }
+            50% { background: #252c42; }
+            100% { background: var(--bg-color); }
+        }
+
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 250px;
+            height: 100vh;
+            background: #141925;
+            padding: 20px;
+            box-shadow: 2px 0 10px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+            transition: transform 0.3s ease;
+        }
+
+        .sidebar h2 {
+            color: #fff;
+            font-size: 24px;
+            margin-bottom: 30px;
+            text-align: center;
+            text-shadow: 0 0 10px var(--accent-color);
+            animation: neonFlicker 3s infinite;
+        }
+
+        @keyframes neonFlicker {
+            0%, 100% { text-shadow: 0 0 10px var(--accent-color); }
+            50% { text-shadow: 0 0 15px var(--accent-color); }
+        }
+
+        .sidebar ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .sidebar ul li {
+            margin-bottom: 15px;
+        }
+
+        .sidebar ul li a {
+            color: #a1a9c1;
+            text-decoration: none;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            border-radius: 5px;
+            transition: background 0.3s, color 0.3s;
+        }
+
+        .sidebar ul li a:hover, .sidebar ul li a.active {
+            background: #2a3147;
+            color: #fff;
+            box-shadow: 0 0 15px rgba(0, 212, 255, 0.5);
+        }
+
+        .sidebar ul li a i {
+            margin-right: 10px;
+        }
+
+        .main-content {
+            margin-left: 250px;
+            padding: 20px;
+            transition: margin-left 0.3s ease;
+        }
+
+        .navbar {
+            background: #1f2637;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .navbar .navbar-brand {
+            color: #fff;
+            font-size: 20px;
+            font-weight: bold;
+            text-shadow: 0 0 10px var(--accent-color);
+        }
+
+        .navbar .logout-btn {
+            background: #ff4757;
+            border: none;
+            padding: 8px 15px;
+            color: #fff;
+            border-radius: 5px;
+            text-decoration: none;
+            transition: background 0.3s;
+        }
+
+        .navbar .logout-btn:hover {
+            background: #e03e4b;
+            box-shadow: 0 0 15px #ff4757;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border: none;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            transition: transform 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 0 30px rgba(0, 212, 255, 0.5);
+        }
+
+        .card h3 {
+            color: #a1a9c1;
+            font-size: 16px;
+            margin-bottom: 15px;
+            text-shadow: 0 0 5px var(--accent-color);
+        }
+
+        .card p {
+            color: #fff;
+            font-size: 28px;
+            font-weight: bold;
+            margin: 0;
+            animation: numberGlow 2s infinite;
+        }
+
+        @keyframes numberGlow {
+            0%, 100% { text-shadow: 0 0 5px #fff; }
+            50% { text-shadow: 0 0 10px #fff; }
+        }
+
+        .map-container {
+            background: var(--card-bg);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .map-container h3 {
+            color: #a1a9c1;
+            font-size: 20px;
+            margin-bottom: 15px;
+            text-shadow: 0 0 10px var(--accent-color);
+            animation: neonFlicker 3s infinite;
+        }
+
+        #map {
+            height: 500px;
+            width: 100%;
+            border-radius: 5px;
+        }
+
+        #location-updates {
+            font-size: 14px;
+            margin-top: 10px;
+            color: var(--text-color);
+        }
+
+        .table-container {
+            background: var(--card-bg);
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            overflow-x: auto;
+        }
+
+        .table-container h3 {
+            color: #a1a9c1;
+            font-size: 20px;
+            margin-bottom: 15px;
+            text-shadow: 0 0 10px var(--accent-color);
+            animation: neonFlicker 3s infinite;
+        }
+
+        .table {
+            width: 100%;
+            color: var(--text-color);
+        }
+
+        .table thead th {
+            background: #2a3147;
+            color: #fff;
+            padding: 12px;
+            font-weight: normal;
+            border-bottom: 2px solid #1f2637;
+            text-shadow: 0 0 5px var(--accent-color);
+            cursor: pointer;
+        }
+
+        .table tbody td {
+            padding: 12px;
+            border-bottom: 1px solid #1f2637;
+            transition: background 0.3s ease;
+        }
+
+        .table tbody tr:hover {
+            background: #2a3147;
+        }
+
+        .status-unread {
+            color: #ff4444;
+            cursor: pointer;
+            font-weight: bold;
+            transition: color 0.3s ease;
+        }
+
+        .status-read {
+            color: #44ff44;
+            cursor: pointer;
+            font-weight: bold;
+            transition: color 0.3s ease;
+        }
+
+        .status-unread:hover, .status-read:hover {
+            text-decoration: underline;
+        }
+
+        .status-completed {
+            color: #2ecc71;
+            font-weight: bold;
+        }
+
+        .status-ongoing {
+            color: #f1c40f;
+            font-weight: bold;
+        }
+
+        .status-scheduled {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+
+        .details-link {
+            color: var(--accent-color);
+            cursor: pointer;
+            text-decoration: underline;
+        }
+
+        .details-link:hover {
+            color: #00b8d9;
+        }
+
+        .download-btn, .refresh-btn {
+            background: var(--accent-color);
+            border: none;
+            padding: 10px 20px;
+            color: #fff;
+            border-radius: 5px;
+            font-weight: bold;
+            text-transform: uppercase;
+            transition: background 0.3s;
+            cursor: pointer;
+            touch-action: manipulation;
+            margin-right: 10px;
+        }
+
+        .download-btn:hover, .refresh-btn:hover {
+            background: #00b8d9;
+            box-shadow: 0 0 25px #00b8d9;
+        }
+
+        .filter-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .filter-container select, .filter-container input {
+            background: #2a3147;
+            color: #fff;
+            border: 1px solid #1f2637;
+            border-radius: 5px;
+            padding: 5px;
+        }
+
+        .chart-container {
+            margin-bottom: 20px;
+        }
+
+        .map-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .legend {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .legend-item {
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .legend-item.inside i { color: #2ecc71; }
+        .legend-item.outside i { color: #e74c3c; }
+
+        .doctor-marker { background: transparent; border: none; }
+
+        .hamburger {
+            display: none;
+            font-size: 24px;
+            color: #fff;
+            background: none;
+            border: none;
+            cursor: pointer;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+                width: 200px;
+            }
+
+            .sidebar.active {
+                transform: translateX(0);
+            }
+
+            .main-content {
+                margin-left: 0;
+                padding: 10px;
+            }
+
+            .hamburger {
+                display: block;
+            }
+
+            .navbar {
+                padding: 10px;
+            }
+
+            .navbar .navbar-brand {
+                font-size: 16px;
+            }
+
+            .navbar .logout-btn {
+                padding: 6px 10px;
+                font-size: 14px;
+            }
+
+            .card {
+                padding: 15px;
+            }
+
+            .card h3 {
+                font-size: 14px;
+            }
+
+            .card p {
+                font-size: 20px;
+            }
+
+            .map-container, .table-container {
+                padding: 15px;
+            }
+
+            #map {
+                height: 300px;
+            }
+
+            .table thead th, .table tbody td {
+                font-size: 12px;
+                padding: 8px;
+            }
+
+            .download-btn, .refresh-btn {
+                padding: 8px 15px;
+                font-size: 14px;
+            }
+        }
+
+        @media (max-width: 576px) {
+            .sidebar {
+                width: 180px;
+            }
+
+            .sidebar h2 {
+                font-size: 20px;
+            }
+
+            .sidebar ul li a {
+                font-size: 14px;
+                padding: 8px;
+            }
+
+            .card p {
+                font-size: 18px;
+            }
+
+            .map-container h3, .table-container h3 {
+                font-size: 16px;
+            }
+
+            #location-updates {
+                font-size: 12px;
+            }
+
+            .legend-item {
+                font-size: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar" id="sidebar">
+        <h2>DDHS Panel</h2>
+        <ul>
+            <li><a href="#" class="active"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
+            <li><a href="#"><i class="fas fa-calendar-check"></i> Attendance</a></li>
+            <li><a href="#"><i class="fas fa-users"></i> Doctors</a></li>
+            <li><a href="#"><i class="fas fa-file-alt"></i> Reports</a></li>
+            <li><a href="#"><i class="fas fa-cog"></i> Settings</a></li>
+        </ul>
+    </div>
+
+    <div class="main-content">
+        <nav class="navbar">
+            <button class="hamburger" id="hamburger"><i class="fas fa-bars"></i></button>
+            <span class="navbar-brand">DDHS Overview</span>
+            <a href="{{ url_for('logout') }}" class="logout-btn">Logout</a>
+        </nav>
+
+        <div class="row mt-4">
+            <div class="col-md-4 col-sm-6 col-12 mb-3">
+                <div class="card">
+                    <h3>Total Doctors</h3>
+                    <p>{{ users | length }}</p>
+                </div>
+            </div>
+            <div class="col-md-4 col-sm-6 col-12 mb-3">
+                <div class="card">
+                    <h3>Present Today</h3>
+                    <p>{{ attendance_records | selectattr('status', 'equalto', 'Present') | list | length }}</p>
+                </div>
+            </div>
+            <div class="col-md-4 col-sm-6 col-12 mb-3">
+                <div class="card">
+                    <h3>Absent Today</h3>
+                    <p>{{ users | length - (attendance_records | selectattr('status', 'equalto', 'Present') | list | length) }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="map-container">
+            <h3>Live Doctor Tracking</h3>
+            <div class="map-controls">
+                <div class="legend">
+                    <span class="legend-item inside"><i class="fas fa-circle"></i> Inside PHC</span>
+                    <span class="legend-item outside"><i class="fas fa-circle"></i> Outside PHC</span>
+                </div>
+                <button id="refresh-doctors" class="refresh-btn">Refresh</button>
+            </div>
+            <div id="map"></div>
+            <div id="location-updates" class="mt-2"></div>
+        </div>
+
+        <div class="table-container">
+            <h3>Alerts</h3>
+            <button class="download-btn mb-3" onclick="downloadAlertsReport()">Download Alerts Report</button>
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Doctor ID</th>
+                        <th>Message</th>
+                        <th>Timestamp</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for alert in alerts %}
+                    <tr>
+                        <td>{{ alert.doctor_id }}</td>
+                        <td>{{ alert.message }}</td>
+                        <td>{{ alert.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                        <td>
+                            <span class="status-toggle status-{{ 'unread' if alert.status == 'Unread' else 'read' }}" 
+                                  data-alert-id="{{ alert.id }}"
+                                  onclick="toggleAlertStatus({{ alert.id }})">
+                                {{ alert.status }}
+                            </span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="table-container">
+            <h3>Healthcare Services</h3>
+            <!-- KPI Cards -->
+            <div class="row mb-3">
+                <div class="col-md-4 col-sm-6 col-12 mb-3">
+                    <div class="card">
+                        <h3>Total Patients Served</h3>
+                        <p id="total-patients">{{ healthcare_services | sum(attribute='patient_count') }}</p>
+                    </div>
+                </div>
+                <div class="col-md-4 col-sm-6 col-12 mb-3">
+                    <div class="card">
+                        <h3>Average Patients per Service</h3>
+                        <p id="avg-patients">{{ (healthcare_services | sum(attribute='patient_count')) / (healthcare_services | length) if healthcare_services | length > 0 else 0 | round(2) }}</p>
+                    </div>
+                </div>
+                <div class="col-md-4 col-sm-6 col-12 mb-3">
+                    <div class="card">
+                        <h3>Most Common Service</h3>
+                        <p id="most-common-service">{{ most_common_service }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chart -->
+            <div class="chart-container">
+                <canvas id="serviceTypeChart"></canvas>
+            </div>
+
+            <!-- Filter and Export Controls -->
+            <div class="filter-container">
+                <select id="facility-filter">
+                    <option value="">All Facilities</option>
+                    {% for facility in facilities %}
+                    <option value="{{ facility.name }}">{{ facility.name }}</option>
+                    {% endfor %}
+                </select>
+                <select id="service-type-filter">
+                    <option value="">All Service Types</option>
+                    {% for service_type in healthcare_services | map(attribute='service_type') | unique | list %}
+                    <option value="{{ service_type }}">{{ service_type }}</option>
+                    {% endfor %}
+                </select>
+                <input type="date" id="start-date-filter">
+                <input type="date" id="end-date-filter">
+                <button class="download-btn" onclick="exportFilteredData()">Export Filtered Data</button>
+                <button class="download-btn" onclick="downloadHealthcareReport()">Download Healthcare Report</button>
+            </div>
+
+            <!-- Table -->
+            <table class="table" id="healthcare-table">
+                <thead>
+                    <tr>
+                        <th data-sort="doctor_id">Doctor ID</th>
+                        <th data-sort="facility">Facility</th>
+                        <th data-sort="service_type">Service Type</th>
+                        <th data-sort="patient_count">Patients</th>
+                        <th>Details</th>
+                        <th data-sort="status">Status</th>
+                        <th data-sort="timestamp">Timestamp</th>
+                        <th>Download Patient Details</th>
+                    </tr>
+                </thead>
+                <tbody id="healthcare-table-body">
+                    {% for service in healthcare_services %}
+                    {% set facility = facilities | selectattr('id', 'equalto', service.facility_id) | first %}
+                    <tr data-facility="{{ facility.name }}" 
+                        data-service-type="{{ service.service_type }}" 
+                        data-timestamp="{{ service.timestamp.strftime('%Y-%m-%d') }}"
+                        data-status="{{ service.status if service.status else 'Completed' }}">
+                        <td>{{ service.doctor_id }}</td>
+                        <td>{{ facility.name }}</td>
+                        <td>{{ service.service_type }}</td>
+                        <td>{{ service.patient_count }}</td>
+                        <td>
+                            <span class="details-link" 
+                                  data-bs-toggle="modal" 
+                                  data-bs-target="#detailsModal" 
+                                  onclick="showServiceDetails('{{ service.id }}', '{{ service.details or 'N/A' }}', '{{ service.patient_count }}')">
+                                {{ service.details or 'N/A' }}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="status-{{ (service.status if service.status else 'Completed').lower() }}">
+                                {{ service.status if service.status else 'Completed' }}
+                            </span>
+                        </td>
+                        <td>{{ service.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                        <td>
+                            {% if service.patient_details_path %}
+                                <button class="download-btn" onclick="downloadPatientDetails('{{ service.id }}')">Download</button>
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Modal for Service Details -->
+    <div class="modal fade" id="detailsModal" tabindex="-1" aria-labelledby="detailsModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content" style="background: var(--card-bg); color: var(--text-color);">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="detailsModalLabel">Service Details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p><strong>Service ID:</strong> <span id="modal-service-id"></span></p>
+                    <p><strong>Patient Count:</strong> <span id="modal-patient-count"></span></p>
+                    <p><strong>Details:</strong> <span id="modal-details"></span></p>
+                    <!-- Placeholder for additional details like patient demographics -->
+                    <p><strong>Patient Demographics:</strong> Age: 30-50, Gender: Mixed (Example Data)</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const geofences = [
+            {% for geofence in geofences %}
+            {
+                id: {{ geofence.id }},
+                name: "{{ geofence.name }}",
+                lat_min: {{ geofence.lat_min }},
+                lat_max: {{ geofence.lat_max }},
+                lng_min: {{ geofence.lng_min }},
+                lng_max: {{ geofence.lng_max }},
+                lat_center: {{ (geofence.lat_min + geofence.lat_max) / 2 }},
+                lng_center: {{ (geofence.lng_min + geofence.lng_max) / 2 }}
+            }{% if not loop.last %},{% endif %}
+            {% endfor %}
+        ];
+
+        const map = L.map('map').setView([geofences[0].lat_center, geofences[0].lng_center], 15);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        const geofenceLayers = {};
+        geofences.forEach(geofence => {
+            geofenceLayers[geofence.id] = L.rectangle([
+                [geofence.lat_min, geofence.lng_min],
+                [geofence.lat_max, geofence.lng_max]
+            ], {
+                color: '#ff0000',
+                weight: 2,
+                fillOpacity: 0.1
+            }).addTo(map).bindPopup(`${geofence.name} Boundary`);
+        });
+
+        const doctorMarkers = {};
+        const accuracyCircles = {};
+
+        function createDoctorIcon(status) {
+            const color = status === 'Inside' ? '#2ecc71' : '#e74c3c';
+            return L.divIcon({
+                html: `
+                    <div style="
+                        background: ${color};
+                        width: 20px;
+                        height: 20px;
+                        border-radius: 50%;
+                        border: 2px solid white;
+                        box-shadow: 0 0 0 3px ${color}33;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                    ">
+                        <i class="fas fa-user-md" style="color: white; font-size: 10px;"></i>
+                    </div>
+                `,
+                className: 'doctor-marker'
+            });
+        }
+
+        function updateDoctorOnMap(data) {
+            console.log('Received doctor_location_update:', data);
+            const { doctor_id, username, latitude, longitude, accuracy, status, phc_area } = data;
+
+            document.getElementById('location-updates').innerHTML = `
+                <div class="alert alert-${status === 'Inside' ? 'success' : 'danger'}">
+                    <strong><i class="fas fa-user-md"></i> ${username}</strong> (ID: ${doctor_id})<br>
+                    Status: <strong>${status} PHC</strong><br>
+                    PHC Area: <strong>${phc_area}</strong><br>
+                    Location: ${latitude.toFixed(5)}, ${longitude.toFixed(5)}<br>
+                    Accuracy: ±${Math.round(accuracy)} meters<br>
+                    Last update: ${new Date().toLocaleTimeString()}
+                </div>
+            `;
+
+            if (doctorMarkers[doctor_id]) {
+                doctorMarkers[doctor_id]
+                    .setLatLng([latitude, longitude])
+                    .setIcon(createDoctorIcon(status))
+                    .setPopupContent(`
+                        <b>Dr. ${username}</b><br>
+                        Status: ${status} PHC<br>
+                        PHC Area: ${phc_area}<br>
+                        Location: (${latitude.toFixed(5)}, ${longitude.toFixed(5)})<br>
+                        Accuracy: ±${Math.round(accuracy)} meters
+                    `);
+                if (accuracyCircles[doctor_id]) {
+                    accuracyCircles[doctor_id].setLatLng([latitude, longitude]).setRadius(accuracy);
+                }
+            } else {
+                doctorMarkers[doctor_id] = L.marker([latitude, longitude], {
+                    icon: createDoctorIcon(status)
+                }).addTo(map).bindPopup(`
+                    <b>Dr. ${username}</b><br>
+                    Status: ${status} PHC<br>
+                    PHC Area: ${phc_area}<br>
+                    Location: (${latitude.toFixed(5)}, ${longitude.toFixed(5)})<br>
+                    Accuracy: ±${Math.round(accuracy)} meters
+                `);
+                accuracyCircles[doctor_id] = L.circle([latitude, longitude], {
+                    radius: accuracy,
+                    color: status === 'Inside' ? '#2ecc71' : '#e74c3c',
+                    fillOpacity: 0.1,
+                    weight: 1
+                }).addTo(map);
+            }
+
+            map.setView([latitude, longitude], 15);
+        }
+
+        const socket = io('/ddhs');
+        socket.on('connect', () => {
+            console.log('Connected to WebSocket server');
+        });
+
+        socket.on('doctor_location_update', (data) => {
+            updateDoctorOnMap(data);
+        });
+
+        document.getElementById('refresh-doctors').addEventListener('click', () => {
+            fetch('/get_active_doctors')
+                .then(response => response.json())
+                .then(doctors => {
+                    doctors.forEach(doctor => {
+                        fetch(`/get_last_location?doctor_id=${doctor.doctor_id}`)
+                            .then(response => response.json())
+                            .then(data => {
+                                updateDoctorOnMap(data);
+                            })
+                            .catch(error => console.error('Error fetching last location:', error));
+                    });
+                })
+                .catch(error => console.error('Error fetching active doctors:', error));
+        });
+
+        function downloadHealthcareReport() {
+            window.location.href = '/generate_healthcare_report';
+        }
+
+        function downloadAlertsReport() {
+            window.location.href = '/generate_alerts_report';
+        }
+
+        function toggleAlertStatus(alertId) {
+            fetch(`/toggle_alert_status/${alertId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const statusElement = document.querySelector(`.status-toggle[data-alert-id="${alertId}"]`);
+                    statusElement.textContent = data.new_status;
+                    statusElement.classList.remove('status-read', 'status-unread');
+                    statusElement.classList.add(`status-${data.new_status.toLowerCase()}`);
+                } else {
+                    alert('Failed to update alert status: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error toggling alert status:', error);
+                alert('Error toggling alert status: ' + error.message);
+            });
+        }
+
+        // Healthcare Services Features
+        // Filter and Sort
+        const healthcareData = [
+            {% for service in healthcare_services %}
+            {
+                id: "{{ service.id }}",
+                doctor_id: "{{ service.doctor_id }}",
+                facility: "{{ (facilities | selectattr('id', 'equalto', service.facility_id) | first).name }}",
+                service_type: "{{ service.service_type }}",
+                patient_count: {{ service.patient_count }},
+                details: "{{ service.details or 'N/A' }}",
+                status: "{{ service.status if service.status else 'Completed' }}",
+                timestamp: "{{ service.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}",
+                timestamp_date: "{{ service.timestamp.strftime('%Y-%m-%d') }}",
+                patient_details_path: "{{ service.patient_details_path or '' }}"
+            }{% if not loop.last %},{% endif %}
+            {% endfor %}
+        ];
+
+        function applyFilters() {
+            const facilityFilter = document.getElementById('facility-filter').value;
+            const serviceTypeFilter = document.getElementById('service-type-filter').value;
+            const startDateFilter = document.getElementById('start-date-filter').value;
+            const endDateFilter = document.getElementById('end-date-filter').value;
+
+            const filteredData = healthcareData.filter(service => {
+                const matchesFacility = !facilityFilter || service.facility === facilityFilter;
+                const matchesServiceType = !serviceTypeFilter || service.service_type === serviceTypeFilter;
+                const matchesDate = (!startDateFilter || service.timestamp_date >= startDateFilter) &&
+                                   (!endDateFilter || service.timestamp_date <= endDateFilter);
+                return matchesFacility && matchesServiceType && matchesDate;
+            });
+
+            renderTable(filteredData);
+            updateChart(filteredData);
+            updateKPIs(filteredData);
+        }
+
+        function renderTable(data) {
+            const tbody = document.getElementById('healthcare-table-body');
+            tbody.innerHTML = '';
+            data.forEach(service => {
+                const row = document.createElement('tr');
+                row.setAttribute('data-facility', service.facility);
+                row.setAttribute('data-service-type', service.service_type);
+                row.setAttribute('data-timestamp', service.timestamp_date);
+                row.setAttribute('data-status', service.status);
+                row.innerHTML = `
+                    <td>${service.doctor_id}</td>
+                    <td>${service.facility}</td>
+                    <td>${service.service_type}</td>
+                    <td>${service.patient_count}</td>
+                    <td>
+                        <span class="details-link" 
+                              data-bs-toggle="modal" 
+                              data-bs-target="#detailsModal" 
+                              onclick="showServiceDetails('${service.id}', '${service.details}', '${service.patient_count}')">
+                            ${service.details}
+                        </span>
+                    </td>
+                    <td><span class="status-${service.status.toLowerCase()}">${service.status}</span></td>
+                    <td>${service.timestamp}</td>
+                    <td>
+                        ${service.patient_details_path ? 
+                            `<button class="download-btn" onclick="downloadPatientDetails('${service.id}')">Download</button>` : 
+                            'N/A'}
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        // Sorting
+        document.querySelectorAll('#healthcare-table th[data-sort]').forEach(header => {
+            header.addEventListener('click', () => {
+                const sortKey = header.getAttribute('data-sort');
+                const isAscending = header.classList.toggle('sort-asc');
+                const sortedData = [...healthcareData].sort((a, b) => {
+                    const valA = a[sortKey];
+                    const valB = b[sortKey];
+                    if (sortKey === 'patient_count') {
+                        return isAscending ? valA - valB : valB - valA;
+                    } else if (sortKey === 'timestamp') {
+                        return isAscending ? new Date(valA) - new Date(valB) : new Date(valB) - new Date(valA);
+                    } else {
+                        return isAscending ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                    }
+                });
+                renderTable(sortedData);
+            });
+        });
+
+        // Chart
+        const ctx = document.getElementById('serviceTypeChart').getContext('2d');
+        let serviceTypeChart = new Chart(ctx, {
+            type: 'pie',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Service Types',
+                    data: [],
+                    backgroundColor: ['#2ecc71', '#e74c3c', '#f1c40f', '#3498db', '#9b59b6'],
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { position: 'top' },
+                    title: { display: true, text: 'Distribution of Service Types', color: '#fff' }
+                }
+            }
+        });
+
+        function updateChart(data) {
+            const serviceTypeCounts = {};
+            data.forEach(service => {
+                serviceTypeCounts[service.service_type] = (serviceTypeCounts[service.service_type] || 0) + 1;
+            });
+
+            serviceTypeChart.data.labels = Object.keys(serviceTypeCounts);
+            serviceTypeChart.data.datasets[0].data = Object.values(serviceTypeCounts);
+            serviceTypeChart.update();
+        }
+
+        // Update KPIs
+        function updateKPIs(data) {
+            const totalPatients = data.reduce((sum, service) => sum + service.patient_count, 0);
+            const avgPatients = data.length > 0 ? (totalPatients / data.length).toFixed(2) : 0;
+            const serviceTypes = data.map(service => service.service_type);
+            const mostCommonService = serviceTypes.length > 0 ? serviceTypes.reduce((a, b, i, arr) =>
+                arr.filter(v => v === a).length >= arr.filter(v => v === b).length ? a : b) : 'N/A';
+
+            document.getElementById('total-patients').textContent = totalPatients;
+            document.getElementById('avg-patients').textContent = avgPatients;
+            document.getElementById('most-common-service').textContent = mostCommonService;
+        }
+
+        // Export Filtered Data
+        function exportFilteredData() {
+            const tbody = document.getElementById('healthcare-table-body');
+            const rows = Array.from(tbody.getElementsByTagName('tr'));
+            const data = rows.map(row => {
+                const cells = row.getElementsByTagName('td');
+                return [
+                    cells[0].textContent,
+                    cells[1].textContent,
+                    cells[2].textContent,
+                    cells[3].textContent,
+                    cells[4].textContent,
+                    cells[5].textContent,
+                    cells[6].textContent
+                ];
+            });
+
+            const csvContent = [
+                ['Doctor ID', 'Facility', 'Service Type', 'Patients', 'Details', 'Status', 'Timestamp'],
+                ...data
+            ].map(row => row.join(',')).join('\n');
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', 'filtered_healthcare_services.csv');
+            link.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // Show Service Details in Modal
+        function showServiceDetails(serviceId, details, patientCount) {
+            document.getElementById('modal-service-id').textContent = serviceId;
+            document.getElementById('modal-details').textContent = details;
+            document.getElementById('modal-patient-count').textContent = patientCount;
+        }
+
+        // Download Patient Details with Error Handling
+        function downloadPatientDetails(serviceId) {
+            fetch(`/download_patient_details/${serviceId}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Failed to download file');
+                    }
+                    return response.blob();
+                })
+                .then(blob => {
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `patient_details_${serviceId}`; // Adjust the filename as needed
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    window.URL.revokeObjectURL(url);
+                })
+                .catch(error => {
+                    console.error('Error downloading file:', error);
+                    alert('Failed to download patient details: ' + error.message);
+                });
+        }
+
+        // Initialize Filters and Chart
+        document.getElementById('facility-filter').addEventListener('change', applyFilters);
+        document.getElementById('service-type-filter').addEventListener('change', applyFilters);
+        document.getElementById('start-date-filter').addEventListener('change', applyFilters);
+        document.getElementById('end-date-filter').addEventListener('change', applyFilters);
+        applyFilters();
+
+        document.getElementById('hamburger').addEventListener('click', () => {
+            document.getElementById('sidebar').classList.toggle('active');
+        });
+
+        window.addEventListener('resize', () => {
+            if (window.innerWidth > 768) {
+                document.getElementById('sidebar').classList.remove('active');
+            }
+        });
+    </script>
+</body>
+</html>
